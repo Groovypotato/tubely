@@ -1,9 +1,14 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -54,12 +59,6 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	data, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "unable to read file into bytes", err)
-		return
-	}
-
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "unable to get video", err)
@@ -71,18 +70,56 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	thumb := thumbnail{
-		data:      data,
-		mediaType: ctype,
+	var ext string
+
+	mediaType, _, err := mime.ParseMediaType(ctype)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "unable to parse content-type", err)
+		return
+	}
+	if mediaType != "image/png" {
+		if mediaType != "image/jpeg" {
+			respondWithError(w, http.StatusBadRequest, "not a png/jpeg", nil)
+			return
+		}
+	}
+	if mediaType == "image/png" {
+		ext = ".png"
+	} else {
+		ext = ".jpg"
 	}
 
-	videoThumbnails[video.ID] = thumb
+	tid := make([]byte, 32)
 
-	thumbURL := new(string)
+	rand.Read(tid)
 
-	*thumbURL = "http://localhost:" + cfg.port + "/api/thumbnails/" + videoID.String()
+	fname := base64.RawURLEncoding.EncodeToString(tid)
 
-	video.ThumbnailURL = thumbURL
+	filename := fname + ext
+
+	fpath := filepath.Join(cfg.assetsRoot, filename)
+
+	nfile, err := os.Create(fpath)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "unable to write thumbnail", err)
+		return
+	}
+
+	defer nfile.Close()
+
+	numBytes, err := io.Copy(nfile, file)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "unable to copy tumbnail", err)
+		return
+	}
+	if numBytes == 0 {
+		respondWithError(w, http.StatusBadRequest, "0 bytes copied", nil)
+		return
+	}
+
+	tURL := "http://localhost:" + cfg.port + "/assets/" + filename
+
+	video.ThumbnailURL = &tURL
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
