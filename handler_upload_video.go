@@ -101,7 +101,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	tid := make([]byte, 32)
-
 	rand.Read(tid)
 
 	fname := base64.RawURLEncoding.EncodeToString(tid)
