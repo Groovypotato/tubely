@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os/exec"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
@@ -117,4 +120,41 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 	}
 
 	respondWithJSON(w, http.StatusOK, videos)
+}
+
+func gcd(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	return a
+}
+
+func ratioGet(w int, h int) string {
+	div := gcd(w, h)
+	r1 := w / div
+	r2 := h / div
+	ratio := fmt.Sprintf("%d:%d", r1, r2)
+	return ratio
+}
+
+func handlerVideoGetAspectRatio(filepath string) (string, error) {
+	type Stream struct {
+		WIDTH  int `json:"width"`
+		HEIGHT int `json:"height"`
+	}
+	var buffer []byte
+	var stream Stream
+	cmd := exec.Command("ffmpeg", "-v", "error", "-print_format", "json", "-show_streams", filepath)
+	buff := bytes.NewBuffer(buffer)
+	cmd.Stdout = buff
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+	err = json.Unmarshal(buff.Bytes(), &stream)
+	if err != nil {
+		return "", err
+	}
+	ratio := ratioGet(stream.WIDTH, stream.HEIGHT)
+	return ratio, nil
 }

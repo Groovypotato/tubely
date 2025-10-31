@@ -82,6 +82,20 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	defer os.Remove(tFile.Name())
 	defer tFile.Close()
+	var prefix string
+	ratio, err := handlerVideoGetAspectRatio(tFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "unable to get ratio for video", err)
+		return
+	}
+	switch ratio {
+	case "16:9":
+		prefix = "landscape"
+	case "9:16":
+		prefix = "portrait"
+	default:
+		prefix = "other"
+	}
 	bytesCopied, err := io.Copy(tFile, file)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "error copying file", err)
@@ -105,7 +119,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	fname := base64.RawURLEncoding.EncodeToString(tid)
 
-	filename := fname + ext
+	filename := prefix + fname + ext
 
 	params := s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
